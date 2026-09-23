@@ -11,7 +11,9 @@ target/
 *.ipr
 /build
 
-*.log
+.aider*
+.venv/
 
+*.log
 hs_err_pid*
 replay_pid*

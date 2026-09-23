@@ -1,0 +1,79 @@
+# ViGEm Client Native SDK Reference (Distilled)
+
+## Key Technical Notes
+- Thread Safety: NOT thread-safe. Synchronize externally in multi-threaded contexts.
+- Linking: Static linking recommended. Must link against `setupapi.lib`.
+- Dependencies: Requires `windows.h`, `setupapi.lib`, and optionally `Xinput.h`.
+
+---
+
+## Minimal C++ Usage Workflow
+
+### 1. Header Setup & Linking
+```cpp
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <Xinput.h>
+#include <ViGEm/Client.h>
+
+#pragma comment(lib, "setupapi.lib")
+```
+
+### 2. Initialize & Connect Client Driver
+```cpp
+// Allocate client handle
+PVIGEM_CLIENT client = vigem_alloc();
+if (client == nullptr) /* error handling */;
+
+// Connect to bus (expensive operation, do once, not per-frame)
+VIGEM_ERROR err = vigem_connect(client);
+if (!VIGEM_SUCCESS(err)) /* error handling */;
+```
+
+### 3. Spawn & Update Virtual Device (Xbox 360 Example)
+```cpp
+// Allocate target pad & plug into bus
+PVIGEM_TARGET pad = vigem_target_x360_alloc();
+VIGEM_ERROR add_err = vigem_target_add(client, pad);
+if (!VIGEM_SUCCESS(add_err)) /* error handling */;
+
+// Feed input state update
+// Note: XINPUT_GAMEPAD layout directly matches XUSB_REPORT structure
+XINPUT_STATE state;
+XInputGetState(0, &state);
+
+vigem_target_x360_update(
+    client, 
+    pad, 
+    *reinterpret_cast<XUSB_REPORT*>(&state.Gamepad)
+);
+```
+
+### 4. Handle Output Notifications (Rumble / LEDs)
+```cpp
+// Callback signature
+VOID CALLBACK notification(
+    PVIGEM_CLIENT Client,
+    PVIGEM_TARGET Target,
+    UCHAR LargeMotor,
+    UCHAR SmallMotor,
+    UCHAR LedNumber,
+    LPVOID UserData
+) {
+    // Process rumble / LED changes
+}
+
+// Register callback (blocking call, executes sequentially in order of arrival)
+vigem_target_x360_register_notification(client, pad, &notification, nullptr);
+```
+
+### 5. Cleanup & Teardown
+```cpp
+// Unplug and free virtual device
+vigem_target_remove(client, pad);
+vigem_target_free(pad);
+
+// Disconnect and free client handle
+vigem_disconnect(client);
+vigem_free(client);
+```

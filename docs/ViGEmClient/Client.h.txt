@@ -1,0 +1,76 @@
+#include "ViGEm/Common.h"
+
+// Error Codes
+typedef enum _VIGEM_ERRORS {
+    VIGEM_ERROR_NONE = 0x20000000,
+    VIGEM_ERROR_BUS_NOT_FOUND = 0xE0000001,
+    VIGEM_ERROR_NO_FREE_SLOT = 0xE0000002,
+    VIGEM_ERROR_INVALID_TARGET = 0xE0000003,
+    VIGEM_ERROR_REMOVAL_FAILED = 0xE0000004,
+    VIGEM_ERROR_ALREADY_CONNECTED = 0xE0000005,
+    VIGEM_ERROR_TARGET_UNINITIALIZED = 0xE0000006,
+    VIGEM_ERROR_TARGET_NOT_PLUGGED_IN = 0xE0000007,
+    VIGEM_ERROR_BUS_VERSION_MISMATCH = 0xE0000008,
+    VIGEM_ERROR_BUS_ACCESS_FAILED = 0xE0000009,
+    VIGEM_ERROR_CALLBACK_ALREADY_REGISTERED = 0xE0000010,
+    VIGEM_ERROR_CALLBACK_NOT_FOUND = 0xE0000011,
+    VIGEM_ERROR_BUS_ALREADY_CONNECTED = 0xE0000012,
+    VIGEM_ERROR_BUS_INVALID_HANDLE = 0xE0000013,
+    VIGEM_ERROR_XUSB_USERINDEX_OUT_OF_RANGE = 0xE0000014,
+    VIGEM_ERROR_INVALID_PARAMETER = 0xE0000015,
+    VIGEM_ERROR_NOT_SUPPORTED = 0xE0000016,
+    VIGEM_ERROR_WINAPI = 0xE0000017,
+    VIGEM_ERROR_TIMED_OUT = 0xE0000018,
+    VIGEM_ERROR_IS_DISPOSING = 0xE0000019,
+} VIGEM_ERROR;
+
+#define VIGEM_SUCCESS(_val_) (_val_ == VIGEM_ERROR_NONE)
+
+// Handles
+typedef struct _VIGEM_CLIENT_T *PVIGEM_CLIENT;
+typedef struct _VIGEM_TARGET_T *PVIGEM_TARGET;
+
+// Callbacks
+typedef VOID (CALLBACK *PFN_VIGEM_TARGET_ADD_RESULT)(PVIGEM_CLIENT Client, PVIGEM_TARGET Target, VIGEM_ERROR Result);
+typedef VOID (CALLBACK *PFN_VIGEM_X360_NOTIFICATION)(PVIGEM_CLIENT Client, PVIGEM_TARGET Target, UCHAR LargeMotor, UCHAR SmallMotor, UCHAR LedNumber, LPVOID UserData);
+typedef VOID (CALLBACK *PFN_VIGEM_DS4_NOTIFICATION)(PVIGEM_CLIENT Client, PVIGEM_TARGET Target, UCHAR LargeMotor, UCHAR SmallMotor, DS4_LIGHTBAR_COLOR LightbarColor, LPVOID UserData);
+
+// Client API
+PVIGEM_CLIENT vigem_alloc(void); // Allocates a driver client instance.
+void vigem_free(PVIGEM_CLIENT vigem); // Frees client instance memory.
+VIGEM_ERROR vigem_connect(PVIGEM_CLIENT vigem); // Connects client to emulation bus driver.
+void vigem_disconnect(PVIGEM_CLIENT vigem); // Disconnects client and destroys attached targets.
+
+// Target Allocation & Management
+PVIGEM_TARGET vigem_target_x360_alloc(void); // Allocates an Xbox 360 target device.
+PVIGEM_TARGET vigem_target_ds4_alloc(void); // Allocates a DS4 target device.
+void vigem_target_free(PVIGEM_TARGET target); // Frees target device memory.
+VIGEM_ERROR vigem_target_add(PVIGEM_CLIENT vigem, PVIGEM_TARGET target); // Plugs in target device (blocking).
+VIGEM_ERROR vigem_target_add_async(PVIGEM_CLIENT vigem, PVIGEM_TARGET target, PFN_VIGEM_TARGET_ADD_RESULT result); // Plugs in target device (async).
+VIGEM_ERROR vigem_target_remove(PVIGEM_CLIENT vigem, PVIGEM_TARGET target); // Unplugs target device.
+
+// Target Information & Identification
+BOOLEAN vigem_target_is_waitable_add_supported(PVIGEM_TARGET target); // Checks driver readiness for waitable add support.
+void vigem_target_set_vid(PVIGEM_TARGET target, USHORT vid); // Sets custom Vendor ID.
+void vigem_target_set_pid(PVIGEM_TARGET target, USHORT pid); // Sets custom Product ID.
+USHORT vigem_target_get_vid(PVIGEM_TARGET target); // Gets Vendor ID.
+USHORT vigem_target_get_pid(PVIGEM_TARGET target); // Gets Product ID.
+ULONG vigem_target_get_index(PVIGEM_TARGET target); // Gets driver-assigned internal target index.
+VIGEM_TARGET_TYPE vigem_target_get_type(PVIGEM_TARGET target); // Gets target type.
+BOOL vigem_target_is_attached(PVIGEM_TARGET target); // Returns TRUE if target is attached to bus.
+
+// Xbox 360 Specific API
+VIGEM_ERROR vigem_target_x360_register_notification(PVIGEM_CLIENT vigem, PVIGEM_TARGET target, PFN_VIGEM_X360_NOTIFICATION notification, LPVOID userData); // Registers rumble/LED callback.
+void vigem_target_x360_unregister_notification(PVIGEM_TARGET target); // Unregisters notification callback.
+VIGEM_ERROR vigem_target_x360_update(PVIGEM_CLIENT vigem, PVIGEM_TARGET target, XUSB_REPORT report); // Sends input report to X360 target.
+VIGEM_ERROR vigem_target_x360_get_user_index(PVIGEM_CLIENT vigem, PVIGEM_TARGET target, PULONG index); // Gets assigned player user index (XInput compatible).
+VIGEM_ERROR vigem_target_x360_get_output(PVIGEM_CLIENT vigem, PVIGEM_TARGET target, PXUSB_OUTPUT_DATA output); // Reads current LED/rumble output state.
+
+// DualShock 4 Specific API
+VIGEM_ERROR vigem_target_ds4_register_notification(PVIGEM_CLIENT vigem, PVIGEM_TARGET target, PFN_VIGEM_DS4_NOTIFICATION notification, LPVOID userData); // [Deprecated] Registers lightbar/rumble callback.
+void vigem_target_ds4_unregister_notification(PVIGEM_TARGET target); // [Deprecated] Unregisters notification callback.
+VIGEM_ERROR vigem_target_ds4_update(PVIGEM_CLIENT vigem, PVIGEM_TARGET target, DS4_REPORT report); // [Deprecated] Sends standard input report.
+VIGEM_ERROR vigem_target_ds4_update_ex(PVIGEM_CLIENT vigem, PVIGEM_TARGET target, DS4_REPORT_EX report); // Sends extended input report (gyro, touch, etc.).
+VIGEM_ERROR vigem_target_ds4_await_output_report(PVIGEM_CLIENT vigem, PVIGEM_TARGET target, PDS4_OUTPUT_BUFFER buffer); // Blocks until DS4 raw output report is received.
+VIGEM_ERROR vigem_target_ds4_await_output_report_timeout(PVIGEM_CLIENT vigem, PVIGEM_TARGET target, DWORD milliseconds, PDS4_OUTPUT_BUFFER buffer); // Awaits output report with timeout.
+VIGEM_ERROR vigem_target_ds4_get_output(PVIGEM_CLIENT vigem, PVIGEM_TARGET target, PDS4_OUTPUT_DATA output); // Reads current LED/rumble output state.
